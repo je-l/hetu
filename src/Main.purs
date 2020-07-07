@@ -1,57 +1,69 @@
-module Main (parseHetu, HetuDecade, prettyPrintHetu, Hetu) where
+module Main (parseHetu, HetuCentury, prettyPrintHetu, Hetu, intToBottom) where
 
 import Prelude
 
-import Data.DateTime (Date, DateTime(..), Day, Month, Time(..), Year, canonicalDate)
+import Data.Date (exactDate, year)
+import Data.DateTime (Date, DateTime(..), Day, Month, Time(..), Year)
 import Data.Either (Either(..))
-import Data.Enum (class BoundedEnum, toEnum)
+import Data.Enum (class BoundedEnum, fromEnum, toEnum)
 import Data.Formatter.DateTime (FormatterCommand(..), format)
 import Data.Int (fromString)
-import Data.List (List(..), fold, foldr, (:))
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.List (List(..), foldr, (:))
+import Data.Maybe (Maybe(..), fromJust, fromMaybe)
 import Data.String (length)
 import Data.String.CodeUnits (fromCharArray, singleton)
-import Partial.Unsafe (unsafeCrashWith)
+import Partial.Unsafe (unsafeCrashWith, unsafePartial)
 import Text.Parsing.Parser (Parser, fail, parseErrorMessage, parseErrorPosition, runParser)
 import Text.Parsing.Parser.Pos (Position(..))
 import Text.Parsing.Parser.String (anyChar, eof)
 import Text.Parsing.Parser.Token (digit)
 
-data HetuDecade
+data HetuCentury
   = Minus
   | Plus
   | ALetter
 
-instance showDecade :: Show HetuDecade where
+instance showCentury :: Show HetuCentury where
   show Minus = "-"
   show Plus = "+"
   show ALetter = "A"
 
-type Hetu
-  = { day :: Day
-    , month :: Month
-    , twoYearDigits :: Int
-    , decade :: HetuDecade
-    , id :: String
-    , checkSum :: Char
-    }
+type Hetu = { date :: Date, id :: String }
+
+yearFromHetu :: Int -> HetuCentury -> Maybe Year
+yearFromHetu hetu letter = case letter of
+  Minus -> toEnum $ 1900 + hetu
+  Plus -> toEnum $ 1800 + hetu
+  ALetter -> toEnum $ 2000 + hetu
+
+centuryOf :: Hetu -> HetuCentury
+centuryOf hetu = intYear hetu.date
+  where
+  intYear = yearToCentury <<< fromEnum <<< year
+  yearToCentury y
+    | y < 1900 = Plus
+    | y > 2000 = ALetter
+    | otherwise = Minus
+
+realCheckSum :: Date -> String -> Char
+realCheckSum date id = remToCheckcsum (mod combined 31)
+  where
+  combined = unsafePartial (fromJust (fromString combinedMaybe))
+  combinedMaybe = dateToSixLetter date <> id
+
+dateToSixLetter :: Date -> String
+dateToSixLetter d = format hetuFormat datetime
+  where
+  hetuFormat = DayOfMonthTwoDigits : MonthTwoDigits : YearTwoDigits : Nil
+  datetime = dateTimeFromHetu d
 
 prettyPrintHetu :: Hetu -> String
-prettyPrintHetu hetu = format hetuFormat datetime <> decade <> hetu.id <> checkSumLetter
+prettyPrintHetu hetu = dateToSixLetter (hetu.date) <> show century <> hetu.id <> singleton checkSumLetter
   where
-  datetime = dateTimeFromHetu hetu
-  decade = show hetu.decade
+  datetime = dateTimeFromHetu hetu.date
+  century = centuryOf hetu
   hetuFormat = DayOfMonthTwoDigits : MonthTwoDigits : YearTwoDigits : Nil
-  checkSumLetter = singleton hetu.checkSum
-
-yearFromHetu :: Hetu -> Year
-yearFromHetu hetu = case hetu.decade of
-  Minus -> intToBottom $ 1900 + hetu.twoYearDigits
-  Plus -> intToBottom $ 1800 + hetu.twoYearDigits
-  ALetter -> intToBottom $ 2000 + hetu.twoYearDigits
-
-dateFromHetu :: Hetu -> Date
-dateFromHetu hetu = canonicalDate (yearFromHetu hetu) hetu.month hetu.day
+  checkSumLetter = realCheckSum (hetu.date) (hetu.id)
 
 intToBottom :: forall t. BoundedEnum t => Int -> t
 intToBottom = fromMaybe bottom <<< toEnum
@@ -59,11 +71,10 @@ intToBottom = fromMaybe bottom <<< toEnum
 bottomEnum :: forall a. BoundedEnum a => a
 bottomEnum = fromMaybe bottom $ toEnum 0
 
-dateTimeFromHetu :: Hetu -> DateTime
-dateTimeFromHetu hetu = DateTime d midnight
+dateTimeFromHetu :: Date -> DateTime
+dateTimeFromHetu d = DateTime d midnight
   where
   midnight = Time bottomEnum bottomEnum bottomEnum bottomEnum
-  d = dateFromHetu hetu
 
 concatInts :: List Int -> String
 concatInts ints = foldr append "" $ ints <#> show
@@ -108,14 +119,6 @@ padToTwoLen int = if length stringified < 2 then "0" <> stringified else stringi
   where
   stringified = show int
 
-checkSum :: Int -> Int -> Int -> String -> Char
-checkSum rawDay rawMonth rawYear id = remToCheckcsum $ mod concattedNum 31
-  where
-  concattedNum = case fromString $ concattedStr <> id of
-    Nothing -> unsafeCrashWith $ "cannot parse id: " <> id
-    Just a -> a
-  concattedStr = fold $ padToTwoLen <$> rawDay : rawMonth : rawYear : Nil
-
 twoDigitNum :: Parser String Int
 twoDigitNum = do
   left <- digit
@@ -140,14 +143,14 @@ parseMonth = do
     Nothing -> fail "cannot parse month"
     Just month -> pure month
 
-parseDecade :: Parser String HetuDecade
-parseDecade = do
+parseCentury :: Parser String HetuCentury
+parseCentury = do
   c <- anyChar
   case c of
     '-' -> pure Minus
     '+' -> pure Plus
     'A' -> pure ALetter
-    o -> fail $ "invalid decade: " <> singleton o
+    o -> fail $ "Invalid century: \"" <> singleton o <> "\""
 
 parseId :: Parser String String
 parseId = do
@@ -157,27 +160,39 @@ parseId = do
 
   pure $ fromCharArray [ first, second, third ]
 
-hetuParser :: Parser String Hetu
-hetuParser = do
+parseDay :: Parser String Day
+parseDay = do
   rawDay <- twoDigitNum
+  case toEnum rawDay of
+    Nothing -> fail "Illegal day"
+    Just d -> pure d
+
+parseDate :: Parser String Date
+parseDate = do
+  day <- parseDay
   rawMonth <- twoDigitNum
   rawYear <- twoDigitNum
-  decade <- parseDecade
+  century <- parseCentury
+
+  case toEnum rawMonth of
+    Nothing -> fail "Illegal month"
+    Just month -> case yearFromHetu rawYear century of
+      Nothing -> fail "Illegal year"
+      Just year -> case exactDate year month day of
+        Nothing -> fail "Illegal date combination"
+        Just date -> pure date
+
+hetuParser :: Parser String Hetu
+hetuParser = do
+  date <- parseDate
   id <- parseId
   rawCheckSum <- anyChar
-
-  let
-    realCheckSum = checkSum rawDay rawMonth rawYear id
+  let calculatedCheckSum = realCheckSum date id
   eof
-  if rawCheckSum == realCheckSum then
-    pure
-      $ { day: intToBottom rawDay
-        , month: intToBottom rawMonth
-        , twoYearDigits: rawYear
-        , decade
-        , id
-        , checkSum: realCheckSum
-        }
+
+  if calculatedCheckSum == rawCheckSum
+  then
+    pure { date, id }
   else
     fail "Invalid checksum"
 

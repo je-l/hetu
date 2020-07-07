@@ -4,53 +4,50 @@ import Prelude
 
 import Data.Array (filter)
 import Data.Either (Either(..))
-import Data.List (List(..), (:))
 import Data.String (null)
 import Data.String.Utils (lines)
 import Data.Traversable (traverse_)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
-import Main (Hetu, parseHetu, prettyPrintHetu)
+import Main (parseHetu, prettyPrintHetu)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
-import Partial.Unsafe (unsafeCrashWith)
 import Test.Spec (describe, it)
-import Test.Spec.Assertions (shouldEqual)
+import Test.Spec.Assertions (fail, shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
-unsafeParseHetu :: String -> Hetu
-unsafeParseHetu input = case parseHetu input of
-  Left e -> unsafeCrashWith $ "parse failed for valid hetu \"" <> input <> "\": " <> show e
-  Right u -> u
-
 compareHetus :: String -> Aff Unit
-compareHetus hetuInput = prettyPrintHetu stringHetu `shouldEqual` hetuInput
-  where stringHetu = unsafeParseHetu hetuInput
+compareHetus hetuInput = case parseHetu hetuInput of
+    Left e -> fail $ "failed to parse valid hetu: " <> e
+    Right validHetu -> hetuInput `shouldEqual` prettyPrintHetu validHetu
 
-type InvalidHetu = { input :: String, error :: String }
-
-invalidHetus :: List InvalidHetu
-invalidHetus =
-  (
-    { input: "aaaa", error: "Expected digit at column 1"} :
-    { input: "280264-051E", error: "Invalid checksum at column 12"} :
-    Nil
-  )
-
-compareInvalidHetus :: InvalidHetu -> Aff Unit
-compareInvalidHetus hetu = case parseHetu hetu.input of
-  Right success -> unsafeCrashWith $
-    "expected parse error but it was successful: " <> hetu.input
-  Left err -> err `shouldEqual` hetu.error
+assertParseFails :: String -> String -> Aff Unit
+assertParseFails hetu expectedError = case parseHetu hetu of
+  Right success -> fail $
+    "expected parse error but it was successful: " <> hetu
+  Left actualError -> shouldEqual expectedError actualError
 
 main :: Effect Unit
 main = launchAff_ $ runSpec [consoleReporter] do
-  describe "hetu parsing" do
+  describe "successful hetu parsing" do
     it "parse valid hetus" do
-      dumpFile <- readTextFile UTF8 "generated_hetus.txt"
+      dumpFile <- readTextFile UTF8 "fake_valid_hetus.txt"
       let nonemptyLines = filter (not <<< null) $ lines dumpFile
       traverse_ compareHetus nonemptyLines
 
-    it "should give informative errors for failing hetus" do
-      traverse_ compareInvalidHetus invalidHetus
+  describe "parsing invalid hetus" do
+    it "should fail with too short hetu" do
+      assertParseFails "aaaa" "Expected digit at column 1"
+
+    it "should fail with invalid checksum" do
+      assertParseFails "280264-051E" "Invalid checksum at column 12"
+
+    it "should fail with too large day" do
+      assertParseFails "320264-051U" "Illegal day at column 3"
+
+    it "should fail with illegal date" do
+      assertParseFails "310464-051U" "Illegal date combination at column 8"
+
+    it "should fail with invalid century character" do
+      assertParseFails "131052B308T" "Invalid century: \"B\" at column 8"
