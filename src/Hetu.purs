@@ -1,4 +1,4 @@
-module Main (parseHetu, HetuCentury, prettyPrintHetu, Hetu, intToBottom) where
+module Hetu (parseHetu, HetuCentury, prettyPrintHetu, Hetu, intToBottom) where
 
 import Prelude
 
@@ -42,7 +42,7 @@ centuryOf hetu = intYear hetu.date
   intYear = yearToCentury <<< fromEnum <<< year
   yearToCentury y
     | y < 1900 = Plus
-    | y > 2000 = ALetter
+    | y >= 2000 = ALetter
     | otherwise = Minus
 
 realCheckSum :: Date -> String -> Char
