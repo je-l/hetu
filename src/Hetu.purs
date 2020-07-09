@@ -1,16 +1,15 @@
-module Hetu (parseHetu, HetuCentury, prettyPrintHetu, Hetu, intToBottom) where
+module Hetu (parseHetu, HetuCentury, prettyPrintHetu, Hetu) where
 
 import Prelude
 
 import Data.Date (exactDate, year)
-import Data.DateTime (Date, DateTime(..), Day, Month, Time(..), Year)
+import Data.DateTime (Date, DateTime(..), Time(..), Year)
 import Data.Either (Either(..))
 import Data.Enum (class BoundedEnum, fromEnum, toEnum)
 import Data.Formatter.DateTime (FormatterCommand(..), format)
 import Data.Int (fromString)
 import Data.List (List(..), foldr, (:))
-import Data.Maybe (Maybe(..), fromJust, fromMaybe)
-import Data.String (length)
+import Data.Maybe (Maybe(..), fromJust, fromMaybe, maybe)
 import Data.String.CodeUnits (fromCharArray, singleton)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
 import Text.Parsing.Parser (Parser, fail, parseErrorMessage, parseErrorPosition, runParser)
@@ -31,10 +30,11 @@ instance showCentury :: Show HetuCentury where
 type Hetu = { date :: Date, id :: String }
 
 yearFromHetu :: Int -> HetuCentury -> Maybe Year
-yearFromHetu hetu letter = case letter of
-  Minus -> toEnum $ 1900 + hetu
-  Plus -> toEnum $ 1800 + hetu
-  ALetter -> toEnum $ 2000 + hetu
+yearFromHetu hetu letter = toEnum cumulativeYear
+  where cumulativeYear = case letter of
+          Minus -> 1900 + hetu
+          Plus -> 1800 + hetu
+          ALetter -> 2000 + hetu
 
 centuryOf :: Hetu -> HetuCentury
 centuryOf hetu = intYear hetu.date
@@ -46,7 +46,7 @@ centuryOf hetu = intYear hetu.date
     | otherwise = Minus
 
 realCheckSum :: Date -> String -> Char
-realCheckSum date id = remToCheckcsum (mod combined 31)
+realCheckSum date id = remToCheckcsum $ mod combined 31
   where
   combined = unsafePartial (fromJust (fromString combinedMaybe))
   combinedMaybe = dateToSixLetter date <> id
@@ -58,22 +58,17 @@ dateToSixLetter d = format hetuFormat datetime
   datetime = dateTimeFromHetu d
 
 prettyPrintHetu :: Hetu -> String
-prettyPrintHetu hetu = dateToSixLetter (hetu.date) <> show century <> hetu.id <> singleton checkSumLetter
+prettyPrintHetu hetu = dateToSixLetter hetu.date <> show century <> hetu.id <> singleton checkSumLetter
   where
   datetime = dateTimeFromHetu hetu.date
   century = centuryOf hetu
   hetuFormat = DayOfMonthTwoDigits : MonthTwoDigits : YearTwoDigits : Nil
-  checkSumLetter = realCheckSum (hetu.date) (hetu.id)
-
-intToBottom :: forall t. BoundedEnum t => Int -> t
-intToBottom = fromMaybe bottom <<< toEnum
-
-bottomEnum :: forall a. BoundedEnum a => a
-bottomEnum = fromMaybe bottom $ toEnum 0
+  checkSumLetter = realCheckSum hetu.date hetu.id
 
 dateTimeFromHetu :: Date -> DateTime
 dateTimeFromHetu d = DateTime d midnight
   where
+  bottomEnum = fromMaybe bottom $ toEnum 0 :: forall a. BoundedEnum a => a
   midnight = Time bottomEnum bottomEnum bottomEnum bottomEnum
 
 concatInts :: List Int -> String
@@ -112,12 +107,7 @@ remToCheckcsum 27 = 'V'
 remToCheckcsum 28 = 'W'
 remToCheckcsum 29 = 'X'
 remToCheckcsum 30 = 'Y'
-remToCheckcsum remainder = unsafeCrashWith $ "illegal checksum: " <> (show remainder)
-
-padToTwoLen :: Int -> String
-padToTwoLen int = if length stringified < 2 then "0" <> stringified else stringified
-  where
-  stringified = show int
+remToCheckcsum remainder = unsafeCrashWith $ "illegal checksum: " <> show remainder
 
 twoDigitNum :: Parser String Int
 twoDigitNum = do
@@ -126,22 +116,6 @@ twoDigitNum = do
   case fromString $ fromCharArray [ left, right ] of
     Nothing -> fail "cannot parse two part number"
     Just n -> pure n
-
-threeDigitNum :: Parser String Int
-threeDigitNum = do
-  left <- digit
-  right <- digit
-  righter <- digit
-  case fromString $ fromCharArray [ left, right, righter ] of
-    Nothing -> fail "cannot parse three part number"
-    Just n -> pure n
-
-parseMonth :: Parser String Month
-parseMonth = do
-  number <- twoDigitNum
-  case toEnum number of
-    Nothing -> fail "cannot parse month"
-    Just month -> pure month
 
 parseCentury :: Parser String HetuCentury
 parseCentury = do
@@ -154,43 +128,36 @@ parseCentury = do
 
 parseId :: Parser String String
 parseId = do
-  first <- anyChar
-  second <- anyChar
-  third <- anyChar
+  first <- digit
+  second <- digit
+  third <- digit
 
   pure $ fromCharArray [ first, second, third ]
 
-parseDay :: Parser String Day
-parseDay = do
-  rawDay <- twoDigitNum
-  case toEnum rawDay of
-    Nothing -> fail "Illegal day"
-    Just d -> pure d
+parseToDigitEnum :: forall a. BoundedEnum a => String -> Parser String a
+parseToDigitEnum error = do
+  digits <- twoDigitNum
+  maybe (fail error) pure $ toEnum digits
 
 parseDate :: Parser String Date
 parseDate = do
-  day <- parseDay
-  rawMonth <- twoDigitNum
+  day <- parseToDigitEnum "Illegal day"
+  month <- parseToDigitEnum "Illegal month"
   rawYear <- twoDigitNum
   century <- parseCentury
 
-  case toEnum rawMonth of
-    Nothing -> fail "Illegal month"
-    Just month -> case yearFromHetu rawYear century of
-      Nothing -> fail "Illegal year"
-      Just year -> case exactDate year month day of
-        Nothing -> fail "Illegal date combination"
-        Just date -> pure date
+  case yearFromHetu rawYear century of
+    Nothing -> fail "Illegal year"
+    Just year -> maybe (fail "Illegal date combination") pure $ exactDate year month day
 
 hetuParser :: Parser String Hetu
 hetuParser = do
   date <- parseDate
   id <- parseId
   rawCheckSum <- anyChar
-  let calculatedCheckSum = realCheckSum date id
   eof
 
-  if calculatedCheckSum == rawCheckSum
+  if realCheckSum date id == rawCheckSum
   then
     pure { date, id }
   else
