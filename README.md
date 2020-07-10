@@ -1,12 +1,12 @@
-# hetulib
+# Parsing and validation for finnish national identification number
 
-Library for validation and parsing [finnish national identification number (henkilötunnus)](https://dvv.fi/fi/henkilotunnus)
+[Personal identity code - Digi- ja väestötietovirasto](https://dvv.fi/en/personal-identity-code)
 
 ### Development
 
 Install [spago](https://github.com/purescript/spago) and run `spago test`
 
-Run tests in docker with `docker build -t hetulib . && docker run --rm hetulib`
+Run tests in docker with `docker build -t hetu . && docker run --rm hetu`
 
 ### Related projects
 

@@ -1,4 +1,4 @@
-module Hetu (parseHetu, prettyPrintHetu, Hetu, isTemporary, gender, Gender(..)) where
+module Hetu (Hetu, parseHetu, prettyPrintHetu, isTemporary, gender, Gender(..)) where
 
 import Prelude
 import Data.Date (exactDate, year)
@@ -24,7 +24,7 @@ instance showCentury :: Show HetuCentury where
   show Minus = "-"
   show ALetter = "A"
 
--- | Valid hetu. Id is like an assigned serial number.
+-- | Valid hetu. Id is kind of like a serial number.
 type Hetu =
   { birthday :: Date
   , id :: Int
@@ -43,7 +43,7 @@ gender :: Hetu -> Gender
 gender hetu = if even hetu.id then Female else Male
 
 -- | Hetus with id >= 900 are considered "temporary". See
--- | https://fi.wikipedia.org/wiki/Henkil%C3%B6tunnus#Tunnuksen_muoto
+-- | https://en.wikipedia.org/wiki/National_identification_number#Finland
 isTemporary :: Hetu -> Boolean
 isTemporary hetu = hetu.id >= 900
 

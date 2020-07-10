@@ -1,4 +1,4 @@
-{ name = "hetulib"
+{ name = "hetu"
 , dependencies =
   [ "console"
   , "datetime"
@@ -18,4 +18,6 @@
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
+, license = "MIT"
+, repository = "https://github.com/je-l/hetu"
 }
