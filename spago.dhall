@@ -4,6 +4,7 @@
   , "datetime"
   , "effect"
   , "exceptions"
+  , "format"
   , "formatters"
   , "lists"
   , "node-fs"

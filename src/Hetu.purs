@@ -1,33 +1,54 @@
-module Hetu (parseHetu, HetuCentury, prettyPrintHetu, Hetu) where
+module Hetu (parseHetu, prettyPrintHetu, Hetu, isTemporary, gender, Gender(..)) where
 
 import Prelude
-
 import Data.Date (exactDate, year)
 import Data.DateTime (Date, DateTime(..), Time(..), Year)
 import Data.Either (Either(..))
 import Data.Enum (class BoundedEnum, fromEnum, toEnum)
 import Data.Formatter.DateTime (FormatterCommand(..), format)
-import Data.Int (fromString)
-import Data.List (List(..), foldr, (:))
+import Data.Int (even, fromString)
+import Data.List (List(..), (:))
 import Data.Maybe (Maybe(..), fromJust, fromMaybe, maybe)
 import Data.String.CodeUnits (fromCharArray, singleton)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
+import Text.Format as F
 import Text.Parsing.Parser (Parser, fail, parseErrorMessage, parseErrorPosition, runParser)
 import Text.Parsing.Parser.Pos (Position(..))
 import Text.Parsing.Parser.String (anyChar, eof)
 import Text.Parsing.Parser.Token (digit)
 
-data HetuCentury
-  = Minus
-  | Plus
-  | ALetter
+data HetuCentury = Minus | Plus | ALetter
 
 instance showCentury :: Show HetuCentury where
-  show Minus = "-"
   show Plus = "+"
+  show Minus = "-"
   show ALetter = "A"
 
-type Hetu = { date :: Date, id :: String }
+-- | Valid hetu. Id is like an assigned serial number.
+type Hetu =
+  { birthday :: Date
+  , id :: Int
+  }
+
+data Gender = Male | Female
+
+instance showGender :: Show Gender where
+  show Male = "Male"
+  show Female = "Female"
+
+derive instance eqGender :: Eq Gender
+
+-- | Even hetu id is given for females and odd for males.
+gender :: Hetu -> Gender
+gender hetu = if even hetu.id then Female else Male
+
+-- | Hetus with id >= 900 are considered "temporary". See
+-- | https://fi.wikipedia.org/wiki/Henkil%C3%B6tunnus#Tunnuksen_muoto
+isTemporary :: Hetu -> Boolean
+isTemporary hetu = hetu.id >= 900
+
+formatId :: Int -> String
+formatId = F.format $ F.width 3 <> F.zeroFill
 
 yearFromHetu :: Int -> HetuCentury -> Maybe Year
 yearFromHetu hetu letter = toEnum cumulativeYear
@@ -37,7 +58,7 @@ yearFromHetu hetu letter = toEnum cumulativeYear
           ALetter -> 2000 + hetu
 
 centuryOf :: Hetu -> HetuCentury
-centuryOf hetu = intYear hetu.date
+centuryOf hetu = intYear hetu.birthday
   where
   intYear = yearToCentury <<< fromEnum <<< year
   yearToCentury y
@@ -45,34 +66,31 @@ centuryOf hetu = intYear hetu.date
     | y >= 2000 = ALetter
     | otherwise = Minus
 
-realCheckSum :: Date -> String -> Char
+realCheckSum :: Date -> Int -> Char
 realCheckSum date id = remToCheckcsum $ mod combined 31
   where
   combined = unsafePartial (fromJust (fromString combinedMaybe))
-  combinedMaybe = dateToSixLetter date <> id
+  combinedMaybe = dateToSixLetter date <> formatId id
 
 dateToSixLetter :: Date -> String
-dateToSixLetter d = format hetuFormat datetime
+dateToSixLetter date = format hetuFormat datetime
   where
   hetuFormat = DayOfMonthTwoDigits : MonthTwoDigits : YearTwoDigits : Nil
-  datetime = dateTimeFromHetu d
+  datetime = dateTimeFromHetu date
 
+-- | Render hetu in the traditional "ddmmyytnnnc" format.
 prettyPrintHetu :: Hetu -> String
-prettyPrintHetu hetu = dateToSixLetter hetu.date <> show century <> hetu.id <> singleton checkSumLetter
+prettyPrintHetu hetu = date <> show century <> formatId hetu.id <> singleton cs
   where
-  datetime = dateTimeFromHetu hetu.date
+  date = dateToSixLetter hetu.birthday
   century = centuryOf hetu
-  hetuFormat = DayOfMonthTwoDigits : MonthTwoDigits : YearTwoDigits : Nil
-  checkSumLetter = realCheckSum hetu.date hetu.id
+  cs = realCheckSum hetu.birthday hetu.id
 
 dateTimeFromHetu :: Date -> DateTime
 dateTimeFromHetu d = DateTime d midnight
   where
   bottomEnum = fromMaybe bottom $ toEnum 0 :: forall a. BoundedEnum a => a
   midnight = Time bottomEnum bottomEnum bottomEnum bottomEnum
-
-concatInts :: List Int -> String
-concatInts ints = foldr append "" $ ints <#> show
 
 -- https://fi.wikipedia.org/wiki/Henkil%C3%B6tunnus#Tunnuksen_muoto
 remToCheckcsum :: Int -> Char
@@ -107,15 +125,18 @@ remToCheckcsum 27 = 'V'
 remToCheckcsum 28 = 'W'
 remToCheckcsum 29 = 'X'
 remToCheckcsum 30 = 'Y'
-remToCheckcsum remainder = unsafeCrashWith $ "illegal checksum: " <> show remainder
+remToCheckcsum remainder =
+  unsafeCrashWith $ "illegal checksum: " <> show remainder
 
 twoDigitNum :: Parser String Int
 twoDigitNum = do
   left <- digit
   right <- digit
-  case fromString $ fromCharArray [ left, right ] of
-    Nothing -> fail "cannot parse two part number"
-    Just n -> pure n
+
+  maybe
+    (fail "Cannot parse two part number")
+    pure $
+    fromString (fromCharArray [ left, right ])
 
 parseCentury :: Parser String HetuCentury
 parseCentury = do
@@ -126,18 +147,27 @@ parseCentury = do
     'A' -> pure ALetter
     o -> fail $ "Invalid century: \"" <> singleton o <> "\""
 
-parseId :: Parser String String
+parseId :: Parser String Int
 parseId = do
   first <- digit
   second <- digit
   third <- digit
 
-  pure $ fromCharArray [ first, second, third ]
+  let idNum = unsafePartial $
+        fromJust (fromString (fromCharArray [ first, second, third ]))
+
+  -- "Yksilönumero on välillä 002–899. Numeroita 900–999 käytetään tilapäisissä
+  -- henkilötunnuksissa"
+  if idNum < 2
+  then
+    fail "Too low id"
+  else
+    pure idNum
 
 parseToDigitEnum :: forall a. BoundedEnum a => String -> Parser String a
 parseToDigitEnum error = do
   digits <- twoDigitNum
-  maybe (fail error) pure $ toEnum digits
+  maybe (fail error) pure (toEnum digits)
 
 parseDate :: Parser String Date
 parseDate = do
@@ -148,21 +178,25 @@ parseDate = do
 
   case yearFromHetu rawYear century of
     Nothing -> fail "Illegal year"
-    Just year -> maybe (fail "Illegal date combination") pure $ exactDate year month day
+    Just year -> maybe
+      (fail "Illegal date")
+      pure $
+      exactDate year month day
 
 hetuParser :: Parser String Hetu
 hetuParser = do
-  date <- parseDate
+  birthday <- parseDate
   id <- parseId
-  rawCheckSum <- anyChar
+  supposedCheckSum <- anyChar
   eof
 
-  if realCheckSum date id == rawCheckSum
+  if realCheckSum birthday id == supposedCheckSum
   then
-    pure { date, id }
+    pure { birthday, id }
   else
     fail "Invalid checksum"
 
+-- | Parse and validate finnish national identification number "henkilötunnus".
 parseHetu :: String -> Either String Hetu
 parseHetu input = case runParser input hetuParser of
   Left error -> Left $ parseErrorMessage error <> " at column " <> col
