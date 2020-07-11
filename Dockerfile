@@ -1,6 +1,8 @@
-ARG NODE_TAG=14-buster-slim
-ARG PURESCRIPT_VER=0.13.8
-ARG SPAGO_VER=0.15.3
+# See /.github/workflows/tests.yml for how to use this dockerfile.
+
+ARG NODE_TAG
+ARG PURESCRIPT_VER
+ARG SPAGO_VER
 
 FROM node:${NODE_TAG}
 
