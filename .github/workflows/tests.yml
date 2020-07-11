@@ -5,6 +5,8 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  schedule:
+    - cron: "10 0 * * *"
 
 jobs:
   build:
@@ -18,7 +20,7 @@ jobs:
 
         docker build \
           --pull \
-          --build-arg NODE_TAG=lates \
+          --build-arg NODE_TAG=latest \
           --build-arg PURESCRIPT_VER=latest \
           --build-arg SPAGO_VER=latest \
           -t hetu_latest \
