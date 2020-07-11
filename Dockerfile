@@ -1,8 +1,12 @@
-FROM node:14-buster-slim
+ARG NODE_TAG=14-buster-slim
+ARG PURESCRIPT_VER=0.13.8
+ARG SPAGO_VER=0.15.3
+
+FROM node:${NODE_TAG}
 
 RUN apt-get update && apt-get install --no-install-recommends -y libtinfo5 netbase ca-certificates
 
-RUN npm i --unsafe-perm -g purescript@0.13.8 spago@0.15.3
+RUN npm i --unsafe-perm -g purescript@${PURESCRIPT_VER} spago@${SPAGO_VER}
 COPY spago.dhall packages.dhall /app/
 
 WORKDIR /app

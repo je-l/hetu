@@ -11,7 +11,16 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
-    - name: Run tests
+    - name: Run tests with pinned dependency versions and latest versions
       run: |
         docker build -t hetu .
         docker run --rm hetu
+
+        docker build \
+          --pull \
+          --build-arg NODE_TAG=lates \
+          --build-arg PURESCRIPT_VER=latest \
+          --build-arg SPAGO_VER=latest \
+          -t hetu_latest \
+          .
+        docker run --rm hetu_latest

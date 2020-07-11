@@ -6,7 +6,8 @@
 
 Install [spago](https://github.com/purescript/spago) and run `spago test`
 
-Run tests in docker with `docker build -t hetu . && docker run --rm hetu`
+Run tests in docker with `docker build -t hetu . && docker run
+--rm hetu`
 
 ### Related projects
 
