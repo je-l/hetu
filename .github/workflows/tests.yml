@@ -16,6 +16,9 @@ jobs:
           - node: 14-buster-slim
             purescript: "0.13.8"
             spago: "0.15.3"
+
+          # Run the tests with latest versions too, since purescript and spago
+          # are not stable.
           - node: latest
             purescript: latest
             spago: latest
