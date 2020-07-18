@@ -8,9 +8,8 @@ import Data.Enum (class BoundedEnum, fromEnum, toEnum)
 import Data.Formatter.DateTime (FormatterCommand(..), format)
 import Data.Int (even, fromString)
 import Data.List (List(..), (:))
-import Data.Maybe (Maybe(..), fromJust, fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String.CodeUnits (fromCharArray, singleton)
-import Partial.Unsafe (unsafeCrashWith, unsafePartial)
 import Text.Format as F
 import Text.Parsing.Parser (Parser, fail, parseErrorMessage, parseErrorPosition, runParser)
 import Text.Parsing.Parser.Pos (Position(..))
@@ -66,11 +65,12 @@ centuryOf hetu = intYear hetu.birthday
     | y >= 2000 = ALetter
     | otherwise = Minus
 
-realCheckSum :: Date -> Int -> Char
-realCheckSum date id = remToCheckcsum $ mod combined 31
-  where
-  combined = unsafePartial (fromJust (fromString combinedMaybe))
-  combinedMaybe = dateToSixLetter date <> formatId id
+realCheckSum :: Date -> Int -> Either String Char
+realCheckSum date id = case fromString $ dateToSixLetter date <> formatId id of
+  Nothing -> Left "Invalid date for checksum"
+  Just combined -> case remToCheckcsum $ mod combined 31 of
+    Left e -> Left $ "Error calculating checksum: " <> e
+    Right r -> Right r
 
 dateToSixLetter :: Date -> String
 dateToSixLetter date = format hetuFormat datetime
@@ -79,12 +79,13 @@ dateToSixLetter date = format hetuFormat datetime
   datetime = dateTimeFromHetu date
 
 -- | Render hetu in the traditional "ddmmyytnnnc" format.
-prettyPrintHetu :: Hetu -> String
-prettyPrintHetu hetu = date <> show century <> formatId hetu.id <> singleton cs
-  where
-  date = dateToSixLetter hetu.birthday
-  century = centuryOf hetu
-  cs = realCheckSum hetu.birthday hetu.id
+prettyPrintHetu :: Hetu -> Either String String
+prettyPrintHetu hetu = case realCheckSum hetu.birthday hetu.id of
+  Left e -> Left e
+  Right cs -> Right $ date <> show century <> formatId hetu.id <> singleton cs
+    where
+    date = dateToSixLetter hetu.birthday
+    century = centuryOf hetu
 
 dateTimeFromHetu :: Date -> DateTime
 dateTimeFromHetu d = DateTime d midnight
@@ -93,40 +94,39 @@ dateTimeFromHetu d = DateTime d midnight
   midnight = Time bottomEnum bottomEnum bottomEnum bottomEnum
 
 -- https://fi.wikipedia.org/wiki/Henkil%C3%B6tunnus#Tunnuksen_muoto
-remToCheckcsum :: Int -> Char
-remToCheckcsum 0 = '0'
-remToCheckcsum 1 = '1'
-remToCheckcsum 2 = '2'
-remToCheckcsum 3 = '3'
-remToCheckcsum 4 = '4'
-remToCheckcsum 5 = '5'
-remToCheckcsum 6 = '6'
-remToCheckcsum 7 = '7'
-remToCheckcsum 8 = '8'
-remToCheckcsum 9 = '9'
-remToCheckcsum 10 = 'A'
-remToCheckcsum 11 = 'B'
-remToCheckcsum 12 = 'C'
-remToCheckcsum 13 = 'D'
-remToCheckcsum 14 = 'E'
-remToCheckcsum 15 = 'F'
-remToCheckcsum 16 = 'H'
-remToCheckcsum 17 = 'J'
-remToCheckcsum 18 = 'K'
-remToCheckcsum 19 = 'L'
-remToCheckcsum 20 = 'M'
-remToCheckcsum 21 = 'N'
-remToCheckcsum 22 = 'P'
-remToCheckcsum 23 = 'R'
-remToCheckcsum 24 = 'S'
-remToCheckcsum 25 = 'T'
-remToCheckcsum 26 = 'U'
-remToCheckcsum 27 = 'V'
-remToCheckcsum 28 = 'W'
-remToCheckcsum 29 = 'X'
-remToCheckcsum 30 = 'Y'
-remToCheckcsum remainder =
-  unsafeCrashWith $ "illegal checksum: " <> show remainder
+remToCheckcsum :: Int -> Either String Char
+remToCheckcsum 0 = Right '0'
+remToCheckcsum 1 = Right '1'
+remToCheckcsum 2 = Right '2'
+remToCheckcsum 3 = Right '3'
+remToCheckcsum 4 = Right '4'
+remToCheckcsum 5 = Right '5'
+remToCheckcsum 6 = Right '6'
+remToCheckcsum 7 = Right '7'
+remToCheckcsum 8 = Right '8'
+remToCheckcsum 9 = Right '9'
+remToCheckcsum 10 = Right 'A'
+remToCheckcsum 11 = Right 'B'
+remToCheckcsum 12 = Right 'C'
+remToCheckcsum 13 = Right 'D'
+remToCheckcsum 14 = Right 'E'
+remToCheckcsum 15 = Right 'F'
+remToCheckcsum 16 = Right 'H'
+remToCheckcsum 17 = Right 'J'
+remToCheckcsum 18 = Right 'K'
+remToCheckcsum 19 = Right 'L'
+remToCheckcsum 20 = Right 'M'
+remToCheckcsum 21 = Right 'N'
+remToCheckcsum 22 = Right 'P'
+remToCheckcsum 23 = Right 'R'
+remToCheckcsum 24 = Right 'S'
+remToCheckcsum 25 = Right 'T'
+remToCheckcsum 26 = Right 'U'
+remToCheckcsum 27 = Right 'V'
+remToCheckcsum 28 = Right 'W'
+remToCheckcsum 29 = Right 'X'
+remToCheckcsum 30 = Right 'Y'
+remToCheckcsum remainder = Left $ "illegal checksum: " <> show remainder
 
 twoDigitNum :: Parser String Int
 twoDigitNum = do
@@ -153,16 +153,16 @@ parseId = do
   second <- digit
   third <- digit
 
-  let idNum = unsafePartial $
-        fromJust (fromString (fromCharArray [ first, second, third ]))
-
-  -- "Yksilönumero on välillä 002–899. Numeroita 900–999 käytetään tilapäisissä
-  -- henkilötunnuksissa"
-  if idNum < 2
-  then
-    fail "Too low id"
-  else
-    pure idNum
+  case fromString $ fromCharArray [ first, second, third ] of
+    Nothing -> fail "Invalid id"
+    Just idNum ->
+      -- "Yksilönumero on välillä 002–899. Numeroita 900–999 käytetään tilapäisissä
+      -- henkilötunnuksissa"
+      if idNum < 2
+      then
+        fail "Too low id"
+      else
+        pure idNum
 
 parseToDigitEnum :: forall a. BoundedEnum a => String -> Parser String a
 parseToDigitEnum error = do
@@ -190,11 +190,14 @@ hetuParser = do
   supposedCheckSum <- anyChar
   eof
 
-  if realCheckSum birthday id == supposedCheckSum
-  then
-    pure { birthday, id }
-  else
-    fail "Invalid checksum"
+  case realCheckSum birthday id of
+    Left e -> fail $ "Checksum error: " <> e
+    Right sum ->
+      if sum == supposedCheckSum
+      then
+        pure { birthday, id }
+      else
+        fail "Invalid checksum"
 
 -- | Parse and validate finnish national identification number "henkilötunnus".
 parseHetu :: String -> Either String Hetu

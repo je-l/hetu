@@ -28,7 +28,9 @@ throwParseHetu hetu = either fail pure (parseHetu hetu)
 compareHetus :: String -> Aff Unit
 compareHetus hetuInput = do
   hetu <- throwParseHetu hetuInput
-  hetuInput `shouldEqual` prettyPrintHetu hetu
+  case prettyPrintHetu hetu of
+    Left e -> fail e
+    Right printed -> hetuInput `shouldEqual` printed
 
 assertParseFails :: String -> String -> Aff Unit
 assertParseFails hetu expectedError = case parseHetu hetu of
