@@ -1,6 +1,7 @@
 module Hetu (Hetu, parseHetu, prettyPrintHetu, isTemporary, gender, Gender(..)) where
 
 import Prelude
+
 import Data.Date (exactDate, year)
 import Data.DateTime (Date, DateTime(..), Time(..), Year)
 import Data.Either (Either(..))
@@ -136,7 +137,10 @@ twoDigitNum = do
   maybe
     (fail "Cannot parse two part number")
     pure $
-    fromString (fromCharArray [ left, right ])
+    charsToInt [ left, right ]
+
+charsToInt :: Array Char -> Maybe Int
+charsToInt = fromString <<< fromCharArray
 
 parseCentury :: Parser String HetuCentury
 parseCentury = do
@@ -147,22 +151,25 @@ parseCentury = do
     'A' -> pure ALetter
     o -> fail $ "Invalid century: \"" <> singleton o <> "\""
 
+parseNumId :: Parser String Int
+parseNumId = do
+  id <- parseId
+
+  -- "Yksilönumero on välillä 002–899. Numeroita 900–999 käytetään tilapäisissä
+  -- henkilötunnuksissa"
+  if id < 2
+  then
+    fail "Too low id"
+  else
+    pure id
+
 parseId :: Parser String Int
 parseId = do
   first <- digit
   second <- digit
   third <- digit
 
-  case fromString $ fromCharArray [ first, second, third ] of
-    Nothing -> fail "Invalid id"
-    Just idNum ->
-      -- "Yksilönumero on välillä 002–899. Numeroita 900–999 käytetään tilapäisissä
-      -- henkilötunnuksissa"
-      if idNum < 2
-      then
-        fail "Too low id"
-      else
-        pure idNum
+  maybe (fail "Invalid id") pure (charsToInt [ first, second, third ])
 
 parseToDigitEnum :: forall a. BoundedEnum a => String -> Parser String a
 parseToDigitEnum error = do
@@ -186,7 +193,7 @@ parseDate = do
 hetuParser :: Parser String Hetu
 hetuParser = do
   birthday <- parseDate
-  id <- parseId
+  id <- parseNumId
   supposedCheckSum <- anyChar
   eof
 
