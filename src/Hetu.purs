@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Date (exactDate, year)
 import Data.DateTime (Date, DateTime(..), Time(..), Year)
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Enum (class BoundedEnum, fromEnum, toEnum)
 import Data.Formatter.DateTime (FormatterCommand(..), format)
 import Data.Int (even, fromString)
@@ -69,9 +69,11 @@ centuryOf hetu = intYear hetu.birthday
 realCheckSum :: Date -> Int -> Either String Char
 realCheckSum date id = case fromString $ dateToSixLetter date <> formatId id of
   Nothing -> Left "Invalid date for checksum"
-  Just combined -> case remToCheckcsum $ mod combined 31 of
-    Left e -> Left $ "Error calculating checksum: " <> e
-    Right r -> Right r
+  Just combined -> either giveError Right remaining
+    where
+    giveError e = Left $ "Error calculating checksum: " <> e
+    remaining = remToCheckcsum $ mod combined 31
+
 
 dateToSixLetter :: Date -> String
 dateToSixLetter date = format hetuFormat datetime
@@ -81,10 +83,9 @@ dateToSixLetter date = format hetuFormat datetime
 
 -- | Render hetu in the traditional "ddmmyytnnnc" format.
 prettyPrintHetu :: Hetu -> Either String String
-prettyPrintHetu hetu = case realCheckSum hetu.birthday hetu.id of
-  Left e -> Left e
-  Right cs -> Right $ date <> show century <> formatId hetu.id <> singleton cs
+prettyPrintHetu hetu = either Left process $ realCheckSum hetu.birthday hetu.id
     where
+    process cs = Right $ date <> show century <> formatId hetu.id <> singleton cs
     date = dateToSixLetter hetu.birthday
     century = centuryOf hetu
 
@@ -143,25 +144,26 @@ charsToInt :: Array Char -> Maybe Int
 charsToInt = fromString <<< fromCharArray
 
 parseCentury :: Parser String HetuCentury
-parseCentury = do
-  c <- anyChar
-  case c of
-    '-' -> pure Minus
-    '+' -> pure Plus
-    'A' -> pure ALetter
-    o -> fail $ "Invalid century: \"" <> singleton o <> "\""
+parseCentury = anyChar >>= parseCenturyChar
+  where
+  parseCenturyChar century =
+    case century of
+      '-' -> pure Minus
+      '+' -> pure Plus
+      'A' -> pure ALetter
+      o -> fail $ "Invalid century: \"" <> singleton o <> "\""
 
 parseNumId :: Parser String Int
-parseNumId = do
-  id <- parseId
-
+parseNumId = parseId >>= verifyLegalId
+  where
   -- "Yksilönumero on välillä 002–899. Numeroita 900–999 käytetään tilapäisissä
   -- henkilötunnuksissa"
-  if id < 2
-  then
-    fail "Too low id"
-  else
-    pure id
+  verifyLegalId id =
+    if id < 2
+    then
+      fail "Too low id"
+    else
+      pure id
 
 parseId :: Parser String Int
 parseId = do
@@ -169,12 +171,12 @@ parseId = do
   second <- digit
   third <- digit
 
-  maybe (fail "Invalid id") pure (charsToInt [ first, second, third ])
+  maybe (fail "Invalid id") pure $ charsToInt [ first, second, third ]
 
 parseToDigitEnum :: forall a. BoundedEnum a => String -> Parser String a
-parseToDigitEnum error = do
-  digits <- twoDigitNum
-  maybe (fail error) pure (toEnum digits)
+parseToDigitEnum errorMessage = twoDigitNum >>= errorHandleDigits
+  where
+  errorHandleDigits digits = maybe (fail errorMessage) pure $ toEnum digits
 
 parseDate :: Parser String Date
 parseDate = do

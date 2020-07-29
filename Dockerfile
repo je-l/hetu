@@ -1,4 +1,4 @@
-# See /.github/workflows/tests.yml for how to use this dockerfile.
+# See .github/workflows/tests.yml
 
 ARG NODE_TAG
 ARG PURESCRIPT_VER
