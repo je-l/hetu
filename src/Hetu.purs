@@ -66,8 +66,8 @@ centuryOf hetu = intYear hetu.birthday
     | y >= 2000 = ALetter
     | otherwise = Minus
 
-realCheckSum :: Date -> Int -> Either String Char
-realCheckSum date id = case fromString $ dateToSixLetter date <> formatId id of
+realChecksum :: Date -> Int -> Either String Char
+realChecksum date id = case fromString $ dateToSixLetter date <> formatId id of
   Nothing -> Left "Invalid date for checksum"
   Just combined -> either giveError Right remaining
     where
@@ -83,7 +83,7 @@ dateToSixLetter date = format hetuFormat datetime
 
 -- | Render hetu in the traditional "ddmmyytnnnc" format.
 prettyPrintHetu :: Hetu -> Either String String
-prettyPrintHetu hetu = either Left process $ realCheckSum hetu.birthday hetu.id
+prettyPrintHetu hetu = either Left process $ realChecksum hetu.birthday hetu.id
     where
     process cs = Right $ date <> show century <> formatId hetu.id <> singleton cs
     date = dateToSixLetter hetu.birthday
@@ -135,10 +135,8 @@ twoDigitNum = do
   left <- digit
   right <- digit
 
-  maybe
-    (fail "Cannot parse two part number")
-    pure $
-    charsToInt [ left, right ]
+  maybe twoDigitFailure pure $ charsToInt [ left, right ]
+  where twoDigitFailure = fail "Cannot parse two part number"
 
 charsToInt :: Array Char -> Maybe Int
 charsToInt = fromString <<< fromCharArray
@@ -171,12 +169,15 @@ parseId = do
   second <- digit
   third <- digit
 
-  maybe (fail "Invalid id") pure $ charsToInt [ first, second, third ]
+  maybe idFailure pure $ charsToInt [ first, second, third ]
+  where
+  idFailure = fail "Invalid id"
 
 parseToDigitEnum :: forall a. BoundedEnum a => String -> Parser String a
 parseToDigitEnum errorMessage = twoDigitNum >>= errorHandleDigits
   where
-  errorHandleDigits digits = maybe (fail errorMessage) pure $ toEnum digits
+  digitFailure = fail errorMessage
+  errorHandleDigits digits = maybe digitFailure pure $ toEnum digits
 
 parseDate :: Parser String Date
 parseDate = do
@@ -199,14 +200,15 @@ hetuParser = do
   supposedCheckSum <- anyChar
   eof
 
-  case realCheckSum birthday id of
-    Left e -> fail $ "Checksum error: " <> e
-    Right sum ->
-      if sum == supposedCheckSum
-      then
-        pure { birthday, id }
-      else
-        fail "Invalid checksum"
+  let failChecksum e = fail $ "checksum error: " <> e
+      verifyChecksum sum =
+        if sum == supposedCheckSum
+        then
+          pure { birthday, id }
+        else
+          fail "Invalid checksum"
+
+  either failChecksum verifyChecksum (realChecksum birthday id)
 
 -- | Parse and validate finnish national identification number "henkilötunnus".
 parseHetu :: String -> Either String Hetu
