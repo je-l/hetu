@@ -6,7 +6,7 @@ ARG SPAGO_VER
 
 FROM node:${NODE_TAG}
 
-RUN apt-get update && apt-get install --no-install-recommends -y libtinfo5 netbase ca-certificates
+RUN apt-get update && apt-get install --no-install-recommends -y libtinfo5 netbase ca-certificates git
 
 RUN npm i --unsafe-perm -g purescript@${PURESCRIPT_VER} spago@${SPAGO_VER}
 COPY spago.dhall packages.dhall /app/
