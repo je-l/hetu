@@ -22,15 +22,13 @@ import Test.Spec.Runner (runSpec)
 throwParseHetu :: forall a. MonadThrow Error a => String -> a Hetu
 throwParseHetu hetu = either fail pure (parseHetu hetu)
   where
-  msg err = error $ "Failed to parse hetu which should have succeeded: " <> err
+  msg err = error $ "Failed to parse hetu which should have succeeded: " <> hetu <> ": " <> err
   fail e = throwError $ msg e
 
 compareHetus :: String -> Aff Unit
 compareHetus hetuInput = do
   hetu <- throwParseHetu hetuInput
-  case prettyPrintHetu hetu of
-    Left e -> fail e
-    Right printed -> hetuInput `shouldEqual` printed
+  hetuInput `shouldEqual` (prettyPrintHetu hetu)
 
 assertParseFails :: String -> String -> Aff Unit
 assertParseFails hetu expectedError = case parseHetu hetu of
@@ -40,13 +38,13 @@ assertParseFails hetu expectedError = case parseHetu hetu of
 
 main :: Effect Unit
 main = launchAff_ $ runSpec [consoleReporter] do
-  describe "successful hetu parsing" do
-    it "parse valid hetus" do
+  describe "Smoke tests" do
+    it "parses list of hetus" do
       dumpFile <- readTextFile UTF8 "fake_valid_hetus.txt"
       let nonemptyLines = filter (not <<< null) $ lines dumpFile
       traverse_ compareHetus nonemptyLines
 
-  describe "parsing invalid hetus" do
+  describe "Invalid hetus" do
     it "should fail with too short hetu" do
       assertParseFails "aaaa" "Expected digit at column 1"
 
@@ -76,7 +74,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
     it "should fail to parse hetu with too low id" do
       assertParseFails "311215A001J" "Too low id at column 11"
 
-  describe "hetu properties" do
+  describe "Valid hetu properties" do
     it "should infer correct gender" do
       maleHetu <- throwParseHetu "280264-051U"
       gender maleHetu `shouldEqual` Male

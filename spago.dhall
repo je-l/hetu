@@ -3,8 +3,6 @@
   [ "datetime"
   , "effect"
   , "format"
-  , "formatters"
-  , "lists"
   , "node-fs-aff"
   , "parsing"
   , "psci-support"
@@ -21,6 +19,7 @@
   , "node-buffer"
   , "prelude"
   , "transformers"
+  , "partial"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
