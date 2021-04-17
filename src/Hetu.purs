@@ -1,4 +1,4 @@
-module Hetu (Hetu, parseHetu, prettyPrintHetu, isTemporary, gender, Gender(..)) where
+module Hetu (Hetu, parseHetu, formatHetu, isTemporary, gender, Gender(..)) where
 
 import Prelude
 
@@ -81,8 +81,8 @@ dateToSixLetter date =
   twoLastDigitsFromYear = mod yearNumeric 100
 
 -- | Render hetu in the traditional "ddmmyytnnnc" format.
-prettyPrintHetu :: Hetu -> String
-prettyPrintHetu hetu = process $ realChecksum hetu.birthday hetu.id
+formatHetu :: Hetu -> String
+formatHetu hetu = process $ realChecksum hetu.birthday hetu.id
     where
     process checksum = date <> show century <> formatId hetu.id <> singleton checksum
     date = F.format (F.width 6 <> F.zeroFill) (dateToSixLetter hetu.birthday)
@@ -158,7 +158,7 @@ parseNumId = parseId >>= verifyLegalId
   verifyLegalId id =
     if id < 2
     then
-      fail "Too low id"
+      fail "Id must be > 1"
     else
       pure id
 
@@ -199,8 +199,8 @@ hetuParser = do
   supposedCheckSum <- anyChar
   eof
 
-  let verifyChecksum sum =
-        if sum == supposedCheckSum
+  let verifyChecksum actualCheckSum =
+        if actualCheckSum == supposedCheckSum
         then
           pure { birthday, id }
         else

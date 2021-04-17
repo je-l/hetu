@@ -10,7 +10,7 @@ import Data.String.Utils (lines)
 import Data.Traversable (traverse_)
 import Effect (Effect)
 import Effect.Aff (Aff, Error, error, launchAff_, throwError)
-import Hetu (Gender(..), Hetu, gender, isTemporary, parseHetu, prettyPrintHetu)
+import Hetu (Gender(..), Hetu, gender, isTemporary, parseHetu, formatHetu)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
 import Test.Spec (describe, it)
@@ -28,7 +28,7 @@ throwParseHetu hetu = either fail pure (parseHetu hetu)
 compareHetus :: String -> Aff Unit
 compareHetus hetuInput = do
   hetu <- throwParseHetu hetuInput
-  hetuInput `shouldEqual` (prettyPrintHetu hetu)
+  hetuInput `shouldEqual` (formatHetu hetu)
 
 assertParseFails :: String -> String -> Aff Unit
 assertParseFails hetu expectedError = case parseHetu hetu of
