@@ -72,7 +72,7 @@ main = launchAff_ $ runSpec [consoleReporter] do
     -- "Yksilönumero on välillä 002–899. Numeroita 900–999 käytetään
     -- tilapäisissä henkilötunnuksissa"
     it "should fail to parse hetu with too low id" do
-      assertParseFails "311215A001J" "Too low id at column 11"
+      assertParseFails "311215A001J" "Id must be > 1 at column 11"
 
   describe "Valid hetu properties" do
     it "should infer correct gender" do
