@@ -1,5 +1,7 @@
 # Parsing and validation for finnish national identification number
 
+API reference available in Pursuit: https://pursuit.purescript.org/packages/purescript-hetu
+
 [Personal identity code - Digi- ja väestötietovirasto](https://dvv.fi/en/personal-identity-code)
 
 This library aims to provide a reliable way to deserialize all valid hetus. Also temporary hetus (id number >= 900) are supported.
