@@ -49,19 +49,19 @@ main = launchAff_ $ runSpec [consoleReporter] do
       assertParseFails "aaaa" "Expected digit at column 1"
 
     it "should fail with invalid checksum" do
-      assertParseFails "280264-051E" "Invalid checksum at column 12"
+      assertParseFails "280264-051E" "Invalid checksum at column 11"
 
     it "should fail with too large day" do
-      assertParseFails "320264-051U" "Illegal day at column 3"
+      assertParseFails "320264-051U" "Illegal day at column 1"
 
     it "should fail with illegal date" do
       assertParseFails "310464-051U" "Illegal date at column 8"
 
     it "should fail with invalid century character" do
-      assertParseFails "131052B308T" "Invalid century: \"B\" at column 8"
+      assertParseFails "131052B308T" "Invalid century: \"B\" at column 7"
 
     it "should fail with too long hetu" do
-      assertParseFails "311215A002JJ" "Expected EOF at column 12"
+      assertParseFails "120195-396UA" "Expected EOF at column 12"
 
     it "should fail to parse too large day within a leap year" do
       assertParseFails "290200-101P" "Illegal date at column 8"

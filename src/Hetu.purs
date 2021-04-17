@@ -12,6 +12,7 @@ import Data.String.CodeUnits (fromCharArray, singleton)
 import Partial.Unsafe (unsafeCrashWith)
 import Text.Format as F
 import Text.Parsing.Parser (Parser, fail, parseErrorMessage, parseErrorPosition, runParser)
+import Text.Parsing.Parser.Combinators (tryRethrow)
 import Text.Parsing.Parser.Pos (Position(..))
 import Text.Parsing.Parser.String (anyChar, eof)
 import Text.Parsing.Parser.Token (digit)
@@ -180,10 +181,10 @@ parseToDigitEnum errorMessage = twoDigitNum >>= errorHandleDigits
 
 parseDate :: Parser String Date
 parseDate = do
-  day <- parseToDigitEnum "Illegal day"
-  month <- parseToDigitEnum "Illegal month"
-  rawYear <- twoDigitNum
-  century <- parseCentury
+  day <- tryRethrow $ parseToDigitEnum "Illegal day"
+  month <- tryRethrow $ parseToDigitEnum "Illegal month"
+  rawYear <- tryRethrow twoDigitNum
+  century <- tryRethrow parseCentury
 
   case yearFromHetu rawYear century of
     Nothing -> fail "Illegal year"
@@ -192,12 +193,9 @@ parseDate = do
       pure $
       exactDate year month day
 
-hetuParser :: Parser String Hetu
-hetuParser = do
-  birthday <- parseDate
-  id <- parseNumId
+checkSumParser :: Date -> Int -> Parser String Hetu
+checkSumParser birthday id = do
   supposedCheckSum <- anyChar
-  eof
 
   let verifyChecksum actualCheckSum =
         if actualCheckSum == supposedCheckSum
@@ -205,8 +203,15 @@ hetuParser = do
           pure { birthday, id }
         else
           fail "Invalid checksum"
-
   verifyChecksum (realChecksum birthday id)
+
+hetuParser :: Parser String Hetu
+hetuParser = do
+  birthday <- parseDate
+  id <- parseNumId
+  parsed <- tryRethrow $ checkSumParser birthday id
+  eof
+  pure parsed
 
 -- | Parse and validate finnish national identification number "henkilötunnus".
 parseHetu :: String -> Either String Hetu
